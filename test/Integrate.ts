@@ -454,7 +454,7 @@ describe("Simple abstraction account", function () {
 
       // sign message
       const signature1 = await this.addr1.signMessage(hashInBytes);
-      const signature2 = await this.addr1.signMessage(hashInBytes);
+      const signature2 = await this.addr2.signMessage(hashInBytes);
 
       // execute
       await this.entrypoint.recover(this.account.address, nonce, newowner, [
