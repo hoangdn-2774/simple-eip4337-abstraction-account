@@ -55,7 +55,9 @@ describe("Simple abstraction account", function () {
 
     // deploy account contract
     this.account = await this.AccountFactory.connect(this.deployer).deploy(
-      this.entrypoint.address
+      this.entrypoint.address,
+      [this.addr1.address, this.addr2.address, this.addr3.address],
+      2
     );
     await this.account.deployed();
     await this.account
@@ -432,6 +434,36 @@ describe("Simple abstraction account", function () {
       expect(actInventoryBalance).to.be.equal(
         preInventoryBalance.add(ethers.BigNumber.from(2000))
       );
+    });
+  });
+
+  describe("recover", async function () {
+    it("should transfer ownership", async function () {
+      // check current owner
+      expect(await this.account.owner()).to.be.equal(this.accountOwner.address);
+
+      // prepare message to sign
+      const nonce = 1;
+      const newowner = this.operator.address;
+      const hash = await this.entrypoint.getRecoverHash(
+        this.account.address,
+        newowner,
+        nonce
+      );
+      const hashInBytes = ethers.utils.arrayify(hash);
+
+      // sign message
+      const signature1 = await this.addr1.signMessage(hashInBytes);
+      const signature2 = await this.addr1.signMessage(hashInBytes);
+
+      // execute
+      await this.entrypoint.recover(this.account.address, nonce, newowner, [
+        signature1,
+        signature2,
+      ]);
+
+      // check new owner
+      expect(await this.account.owner()).to.be.equal(newowner);
     });
   });
 });

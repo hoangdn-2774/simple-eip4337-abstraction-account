@@ -15,6 +15,14 @@ contract VerifySignature {
         return keccak256(abi.encodePacked(_sender, _id));
     }
 
+    function getRecoverHash(
+        address _target,
+        address _newOwner,
+        uint256 _id
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_target, _newOwner, _id));
+    }
+
     /**
      * @dev Get Eth signed message hash
      * @param _messageHash  input hash
@@ -40,6 +48,18 @@ contract VerifySignature {
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
         return recoverSigner(ethSignedMessageHash, signature) == _signer;
+    }
+
+    function getRecoverSigner(
+        address _target,
+        address _newOwner,
+        uint256 _id,
+        bytes memory signature
+    ) public pure returns (address) {
+        bytes32 messageHash = getRecoverHash(_target, _newOwner, _id);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        return recoverSigner(ethSignedMessageHash, signature);
     }
 
     function recoverSigner(
@@ -79,6 +99,7 @@ contract EntryPoint is Ownable(msg.sender), VerifySignature {
 
     mapping(bytes32 => bool) isDone;
     mapping(address => uint256) public userBalance;
+    mapping(uint256 => bool) recoverdNonce;
 
     function depositFee() external payable {
         userBalance[msg.sender] += msg.value;
@@ -175,6 +196,46 @@ contract EntryPoint is Ownable(msg.sender), VerifySignature {
             }
         }
     }
+
+    function recover(
+        address target,
+        uint256 nonce,
+        address newOwner,
+        bytes[] calldata signatures
+    ) external {
+        uint256 minSigner = IAccount(target).minSigners();
+
+        require(
+            !recoverdNonce[nonce],
+            "EntryPoint: request is already processed"
+        );
+
+        require(
+            signatures.length >= minSigner,
+            "EntryPoint: not match min signers"
+        );
+
+        // verify signature
+        for (uint256 ind = 0; ind < signatures.length; ind++) {
+            // must be difference from previous addresses
+            for (uint256 prev = 0; prev < ind; prev++) {
+                require(
+                    keccak256(signatures[ind]) != keccak256(signatures[prev]),
+                    "EntryPoint: duplicate signature"
+                );
+            }
+
+            require(
+                IAccount(target).recoveryAddrs(
+                    getRecoverSigner(target, newOwner, nonce, signatures[ind])
+                ) == true,
+                "EntryPoint: signer is not in list"
+            );
+        }
+
+        // pass all checks, recover
+        IAccount(target).recover(newOwner);
+    }
 }
 
 abstract contract IPayMaster {
@@ -186,4 +247,10 @@ abstract contract IPayMaster {
 
 abstract contract IAccount {
     function owner() external virtual returns (address);
+
+    function minSigners() external virtual returns (uint256);
+
+    function recoveryAddrs(address) external virtual returns (bool);
+
+    function recover(address) external virtual;
 }

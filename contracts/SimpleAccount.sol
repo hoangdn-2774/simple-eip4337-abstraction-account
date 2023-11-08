@@ -6,15 +6,21 @@ import "hardhat/console.sol";
 
 contract SimpleAccount is Ownable(msg.sender) {
     address public entryAddr;
+    mapping(address => bool) public recoveryAddrs;
+    uint256 public minSigners = 2;
 
-    constructor(address entryPoint) {
+    constructor(address entryPoint, address[] memory rcAddrs, uint256 minAddr) {
         entryAddr = entryPoint;
+        minSigners = minAddr;
+        for (uint256 ind = 0; ind < rcAddrs.length; ind++) {
+            recoveryAddrs[rcAddrs[ind]] = true;
+        }
     }
 
     modifier onlyOwnerOrEntryPoint() {
         require(
             msg.sender == owner() || msg.sender == entryAddr,
-            "must be called from owner or entry point"
+            "AA: must be called from owner or entrypoint"
         );
         _;
     }
@@ -38,7 +44,15 @@ contract SimpleAccount is Ownable(msg.sender) {
 
     receive() external payable {}
 
-    function getBalance() public view returns (uint256) {
-        return address(this).balance;
+    function setRecoveryAddr(
+        address _rcAddr,
+        bool _isAllowed
+    ) external onlyOwner {
+        recoveryAddrs[_rcAddr] = _isAllowed;
+    }
+
+    function recover(address _newOwner) external {
+        require(msg.sender == entryAddr, "AA: must be called from entrypoint");
+        super._transferOwnership(_newOwner);
     }
 }
